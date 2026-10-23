@@ -17,19 +17,18 @@ func RunJob(ctx context.Context, job *Job, res chan<- *JobResponse) {
 	succeeded := false
 
 outer:
-	for attempts == job.Retries && !succeeded {
+	for attempts < job.Retries && !succeeded {
 		// Simulate duration of a job
 		duration := time.Duration(rand.IntN(10)+1) * time.Second
 
 		select {
 		case <-time.After(duration):
-			time.Sleep(duration)
 			fullDuration += duration
+			attempts++
 
 			// Simulate succeess or failure of job
 			if ok := rand.IntN(2); ok == 0 {
 				succeeded = false
-				attempts++
 			} else {
 				succeeded = true
 				job.Status = StatusSucceeded
@@ -41,7 +40,7 @@ outer:
 		}
 	}
 
-	if attempts == job.Retries && !succeeded && ctx.Err() == nil {
+	if attempts < job.Retries && !succeeded && ctx.Err() == nil {
 		job.Status = StatusFailed
 	}
 
@@ -62,6 +61,6 @@ outer:
 		Status:     job.Status,
 		Attempts:   attempts,
 		StatusCode: statusCode,
-		DurationMs: fullDuration,
+		DurationMs: time.Duration(fullDuration.Milliseconds()),
 	}
 }
