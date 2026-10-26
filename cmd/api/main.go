@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	_ "modernc.org/sqlite"
 	"github.com/Opxourc/job-queue/internal/config"
 	"github.com/Opxourc/job-queue/internal/handler"
 	"github.com/Opxourc/job-queue/internal/job"
