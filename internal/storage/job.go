@@ -35,7 +35,7 @@ func (r *JobRepository) Create(ctx context.Context, req job.Request) (job.Job, e
 func (r *JobRepository) GetByID(ctx context.Context, id uuid.UUID) (job.Job, error) {
 	var foundJob job.Job
 	if err := r.db.GetContext(ctx, &foundJob,
-		"SELECT * FROM jobs WHERE job_id = ?",
+		"SELECT * FROM jobs WHERE job_id = ? LIMIT 1",
 		id.String()); err != nil {
 		return job.Job{}, err
 	}
