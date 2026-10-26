@@ -1,24 +1,50 @@
 package main
 
 import (
-	"log/slog"
+	"log"
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/Opxourc/job-queue/internal/config"
+	"github.com/Opxourc/job-queue/internal/handler"
+	"github.com/Opxourc/job-queue/internal/job"
+	"github.com/Opxourc/job-queue/internal/service"
+	"github.com/Opxourc/job-queue/internal/storage"
+	"github.com/gin-contrib/timeout"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	r := chi.NewRouter()
+	db, err := storage.ConnectToDatabase(config.DbDriver, config.DbFileName)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	r.Use(middleware.Timeout(TimeoutTime))
+	var repo job.Repository = storage.NewSqliteJobRepository(db)
+	var serv job.Service = service.NewJobService(repo)
+	var hdlr job.Handler = handler.NewJobHandler(serv)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Welcome"))
-	})
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.Use(timeout.New(
+		timeout.WithTimeout(config.ApiTimeout),
+		timeout.WithResponse(func(c *gin.Context) {
+			c.String(http.StatusGatewayTimeout, "request timed out")
+		}),
+	))
 
-	if err := http.ListenAndServe(":"+strconv.Itoa(AddressPort), r); err != nil {
-		slog.Error(err.Error())
+	api := router.Group("/api")
+	{
+		jobs := api.Group("/jobs")
+		{
+			jobs.GET("/", hdlr.List)
+			jobs.GET("/:id", hdlr.GetByID)
+			jobs.POST("/", hdlr.Create)
+			jobs.POST("/:id/cancel", hdlr.Cancel)
+		}
+	}
+
+	if err := router.Run(":" + strconv.Itoa(config.AddressPort)); err != nil {
+		log.Fatal(err)
 	}
 }
