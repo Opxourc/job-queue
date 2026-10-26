@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	_ "modernc.org/sqlite"
 )
 
 var (
@@ -18,6 +17,10 @@ var (
 	ErrPingToDatabaseFailed = errors.New("ping to database failed")
 	ErrInvalidDatabaseFile  = errors.New("database file must be a filename")
 	ErrProjectRootNotFound  = errors.New("project root containing go.mod not found")
+	ErrQueryFailed          = errors.New("query failed to complete")
+	ErrJobAlreadyExists     = errors.New("job already exists")
+	ErrJobDoesNotExist      = errors.New("job doesn't exist")
+	ErrInvalidJobProvided   = errors.New("provided job is invalid")
 )
 
 // ConnectToDatabase opens a database file under the project's data directory.
