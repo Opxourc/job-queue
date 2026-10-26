@@ -8,55 +8,43 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// SqliteJobRepository references the database and implemented JobRepository.
-type SqliteJobRepository struct {
+// JobRepository implements job.Repository for Job repository operations.
+type JobRepository struct {
 	db *sqlx.DB
 }
 
-// Constructs a SqliteJobRepository object.
-func NewSqliteJobRepository(db *sqlx.DB) *SqliteJobRepository {
-	return &SqliteJobRepository{
+// Constructs a JobRepository object.
+func NewSqliteJobRepository(db *sqlx.DB) *JobRepository {
+	return &JobRepository{
 		db: db,
 	}
 }
 
-// Create makes a new record for a new job in the repository.
-// Presistence of jobs takes place here, not construction!
-func (r *SqliteJobRepository) Create(ctx context.Context, new *job.Job) error {
-	if new == nil {
-		return ErrInvalidJobProvided
-	}
-
-	if existing, err := r.GetByID(ctx, new.Id); err != nil {
-		return err
-	} else if existing != nil {
-		return ErrJobAlreadyExists
-	}
+func (r *JobRepository) Create(ctx context.Context, req job.Request) (job.Job, error) {
+	current := job.NewJob(&req)
 
 	if _, err := r.db.NamedExecContext(ctx,
 		`INSERT INTO jobs (job_id, status, retries, lifetime)
-		VALUES (:job_id, :status, :retries, :lifetime)`, new); err != nil {
-		return ErrQueryFailed
+		VALUES (:job_id, :status, :retries, :lifetime)`, current); err != nil {
+		return job.Job{}, ErrQueryFailed
 	}
 
-	return nil
+	return *current, nil
 }
 
-// GetByID finds a job that matches with the provided ID.
-func (r *SqliteJobRepository) GetByID(ctx context.Context, id uuid.UUID) (*job.Job, error) {
+func (r *JobRepository) GetByID(ctx context.Context, id uuid.UUID) (job.Job, error) {
 	var foundJob job.Job
 	if err := r.db.GetContext(ctx, &foundJob,
 		"SELECT * FROM jobs WHERE job_id = ?",
 		id.String()); err != nil {
-		return nil, err
+		return job.Job{}, err
 	}
 
-	return &foundJob, nil
+	return foundJob, nil
 }
 
-// List returns an slice of all jobs that are currently in the repository.
-func (r *SqliteJobRepository) List(ctx context.Context) ([]*job.Job, error) {
-	var jobs []*job.Job
+func (r *JobRepository) List(ctx context.Context) ([]job.Job, error) {
+	var jobs []job.Job
 	if err := r.db.SelectContext(ctx, &jobs, "SELECT * FROM jobs"); err != nil {
 		return nil, ErrQueryFailed
 	}
@@ -64,11 +52,10 @@ func (r *SqliteJobRepository) List(ctx context.Context) ([]*job.Job, error) {
 	return jobs, nil
 }
 
-// UpdateStatus updates the status of a job.
-func (r *SqliteJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status job.JobStatus) error {
+func (r *JobRepository) Update(ctx context.Context, current job.Job) error {
 	if _, err := r.db.ExecContext(ctx,
-		"UPDATE jobs SET status = ? WHERE job_id = ?",
-		status, id.String(),
+		"UPDATE jobs SET status = ?, attempts = ?, duration_sec = ? WHERE job_id = ?",
+		current.Status, current.Attempts, current.DurationSec, current.Id.String(),
 	); err != nil {
 		return ErrQueryFailed
 	}
@@ -76,8 +63,7 @@ func (r *SqliteJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, st
 	return nil
 }
 
-// Delete removes an existing job from the repository.
-func (r *SqliteJobRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *JobRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if _, err := r.db.ExecContext(ctx, "DELETE FROM jobs WHERE job_id = ?", id.String()); err != nil {
 		return ErrQueryFailed
 	}
